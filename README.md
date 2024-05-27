@@ -6,7 +6,7 @@
 
 **安装**
 ```bash
-go get -u e.coding.net/zmexing/zx/go-byte-tts@latest
+go get -u github.com/zmexing/go-byte-tts@latest
 ```
 
 **使用**
