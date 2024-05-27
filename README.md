@@ -16,7 +16,7 @@ package main
 
 import (
 	"context"
-	byteTts "e.coding.net/zmexing/zx/go-byte-tts"
+	byteTts "github.com/zmexing/go-byte-tts"
 	"fmt"
 	"github.com/google/uuid"
 	"log"

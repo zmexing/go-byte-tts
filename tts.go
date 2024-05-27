@@ -2,11 +2,11 @@ package go_byte_tts
 
 import (
 	"context"
-	"e.coding.net/zmexing/zx/go-byte-tts/internal"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/zmexing/go-byte-tts/internal"
 	"io"
 	"net/http"
 	"os"

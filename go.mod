@@ -1,4 +1,4 @@
-module e.coding.net/zmexing/zx/go-byte-tts
+module github.com/zmexing/go-byte-tts
 
 go 1.18
 
