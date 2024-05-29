@@ -134,6 +134,10 @@ type GoTTSInter interface {
     TextToVoice(params map[string]map[string]any) (*http.Response, func(), error)
     // TextToVoiceDisk 文本转语音并写入磁盘
     TextToVoiceDisk(params map[string]map[string]any, outFile *os.File) error
+    // TextToJoinVoiceDisk 文本转语音并写入磁盘
+    // 方法 [TextToVoiceDisk] 因为超过1024字节提示系统错误，所以建议使用 [TextToJoinVoiceDisk]
+    // 该方法会自动将文本按照 1024 字节将文本拆开，最后分片生成后合并成一个语音文件
+    TextToJoinVoiceDisk(params map[string]map[string]any, outFile *os.File) error
     // LongTextToVoiceCreate 长文本语音合成 任务创建
     LongTextToVoiceCreate(params map[string]any) (*TtsAsyncRep, error)
     // LongTextToVoiceId 长文本语音合成 任务查询

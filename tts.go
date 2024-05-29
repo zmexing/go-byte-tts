@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/jefferyjob/go-easy-utils/anyUtil"
 	"github.com/zmexing/go-byte-tts/internal"
 	"io"
 	"net/http"
@@ -33,6 +34,10 @@ type GoTTSInter interface {
 	TextToVoice(params map[string]map[string]any) (*http.Response, func(), error)
 	// TextToVoiceDisk 文本转语音并写入磁盘
 	TextToVoiceDisk(params map[string]map[string]any, outFile *os.File) error
+	// TextToJoinVoiceDisk 文本转语音并写入磁盘
+	// 方法 [TextToVoiceDisk] 因为超过1024字节提示系统错误，所以建议使用 [TextToJoinVoiceDisk]
+	// 该方法会自动将文本按照 1024 字节将文本拆开，最后分片生成后合并成一个语音文件
+	TextToJoinVoiceDisk(params map[string]map[string]any, outFile *os.File) error
 
 	// LongTextToVoiceCreate 长文本语音合成 任务创建
 	// 创建合成任务的频率限制为10 QPS，请勿一次性提交过多任务。
@@ -94,6 +99,23 @@ func WithEmotion() Option {
 	}
 }
 
+func (g *GoTTS) checkParams(params map[string]map[string]any) error {
+	if params["audio"] == nil {
+		params["audio"] = make(map[string]any)
+	}
+	if _, ok := params["audio"]["voice_type"]; !ok {
+		return errors.New("audio.voice_type cannot be empty")
+	}
+	if params["request"] == nil {
+		params["request"] = make(map[string]any)
+	}
+	_, ok := params["request"]["text"]
+	if !ok {
+		return errors.New("request.text cannot be empty")
+	}
+	return nil
+}
+
 // TextToVoiceDisk 文本转语音并写入磁盘
 func (g *GoTTS) TextToVoiceDisk(params map[string]map[string]any, outFile *os.File) error {
 	resp, funcClose, err := g.TextToVoice(params)
@@ -119,6 +141,45 @@ func (g *GoTTS) TextToVoiceDisk(params map[string]map[string]any, outFile *os.Fi
 	}
 
 	return internal.WriteBytesToDisk(audio, outFile)
+}
+
+func (g *GoTTS) TextToJoinVoiceDisk(params map[string]map[string]any, outFile *os.File) error {
+	if err := g.checkParams(params); err != nil {
+		return err
+	}
+	text, _ := params["request"]["text"]
+	textList := internal.SplitText(anyUtil.AnyToStr(text), 1024)
+
+	resAudio := []byte{}
+
+	for _, v := range textList {
+		params["request"]["text"] = v
+		resp, funcClose, err := g.TextToVoice(params)
+		defer funcClose()
+		if err != nil {
+			return err
+		}
+
+		respBody, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+
+		rep := &Rep{}
+		err = json.Unmarshal(respBody, rep)
+		if err != nil {
+			return err
+		}
+
+		audio, err := base64.StdEncoding.DecodeString(rep.Data)
+		if err != nil {
+			return err
+		}
+
+		resAudio = append(resAudio, audio...)
+	}
+
+	return internal.WriteBytesToDisk(resAudio, outFile)
 }
 
 // TextToVoice 文本转语音
