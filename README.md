@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"log"
+	"math/rand"
 	"os"
 	"time"
 )
@@ -41,7 +42,9 @@ func main() {
 		panic("初始化报错: " + fmt.Sprintf("%v", err))
 	}
 
-	fileName := time.Now().Format("2006-01-02-15-04-05") + "_file.mp3"
+	rand.Seed(time.Now().UnixNano())
+	randomInt := rand.Intn(1000000)
+	fileName := fmt.Sprintf("%d", time.Now().Unix()) + "_" + fmt.Sprintf("%d", randomInt) + "_voice.mp3"
 	outFile, err := os.Create(fileName)
 	if err != nil {
 		fmt.Println("Error creating output file:", err)
