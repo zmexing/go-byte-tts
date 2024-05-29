@@ -44,7 +44,7 @@ func NewHTTPClient(ctx context.Context, opts ...Option) *HTTPClient {
 		client: &http.Client{
 			Timeout: timeout,
 		},
-		//requestLogSwitch: true,
+		requestLogSwitch: true,
 	}
 
 	for _, o := range opts {
