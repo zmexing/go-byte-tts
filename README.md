@@ -49,14 +49,14 @@ func main() {
 	}
 	defer outFile.Close()
 
-	params := setParams()
+	params := createParams()
 	err = tts.TextToVoiceDisk(params, outFile)
 	if err != nil {
 		log.Fatalf("TextToVoiceDisk失败, err:%v \n", err)
 	}
 }
 
-func setParams() map[string]map[string]any {
+func createParams() map[string]map[string]any {
 	// 请求参数定义
 	params := make(map[string]map[string]any)
 	params["user"] = make(map[string]any)
@@ -78,13 +78,64 @@ func setParams() map[string]map[string]any {
 }
 ```
 
+长文本转语音演示
+```go
+func TestLongTextToVoiceCreate(t *testing.T) {
+	var params = make(map[string]any)
+	params["text"] = "昏黑 hūn hēi 昏黑的夜色中 昏黑的夜色中，月光如水洒落，静谧而神秘，仿佛将世界染上一抹深邃的诗意。"
+	params["format"] = "mp3"
+	params["voice_type"] = "BV406_V2_streaming"
+
+	tts, err := NewGoTTS(
+		context.TODO(),
+		WithAppId(appId),
+		WithCluster(cluster),
+		WithToken(token),
+		//WithEmotion(), // 开启情感预测
+	)
+	if err != nil {
+		log.Fatalf("初始化失败，err:%v", err)
+	}
+	res, err := tts.LongTextToVoiceCreate(params)
+	if err != nil {
+		log.Fatalf("创建长文本转语音任务失败失败，err:%v", err)
+	}
+
+	fmt.Printf("%v \n", res)
+}
+
+func TestLongTextToVoiceId(t *testing.T) {
+	tts, err := NewGoTTS(
+		context.TODO(),
+		WithAppId(appId),
+		WithCluster(cluster),
+		WithToken(token),
+		//WithEmotion(), // 开启情感预测
+	)
+	if err != nil {
+		log.Fatalf("初始化失败，err:%v", err)
+	}
+	res, err := tts.LongTextToVoiceId("f837abed-a3a1-431c-9967-a025b1bea3aa")
+	if err != nil {
+		log.Fatalf("创建长文本转语音任务失败失败，err:%v", err)
+	}
+
+	fmt.Printf("%v \n", res)
+}
+```
+
 ### 接口
 ```go
-// TextToVoiceDisk 文本转语音并写入磁盘
-func (g *GoTTS) TextToVoiceDisk(params map[string]map[string]any, outFile *os.File) error
-
-// TextToVoice 文本转语音
-func (g *GoTTS) TextToVoice(params map[string]map[string]any) (*http.Response, func(), error) 
+type GoTTSInter interface {
+    // TextToVoice 文本转语音
+    TextToVoice(params map[string]map[string]any) (*http.Response, func(), error)
+    // TextToVoiceDisk 文本转语音并写入磁盘
+    TextToVoiceDisk(params map[string]map[string]any, outFile *os.File) error
+    // LongTextToVoiceCreate 长文本语音合成 任务创建
+    LongTextToVoiceCreate(params map[string]any) (*TtsAsyncRep, error)
+    // LongTextToVoiceId 长文本语音合成 任务查询
+    LongTextToVoiceId(id string) (*TtsAsyncQueryRep, error)
+}
 ```
 
 ## 参考文档

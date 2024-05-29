@@ -14,11 +14,15 @@ import (
 	"time"
 )
 
-const (
-	appId   = "xxx"
-	token   = "xxx"
-	cluster = "xxx"
+var (
+	appId   = os.Getenv("byte_appId")
+	token   = os.Getenv("byte_token")
+	cluster = os.Getenv("byte_cluster")
 )
+
+func TestEnv(t *testing.T) {
+	//fmt.Println(appId, token, cluster)
+}
 
 func TestTextToVoiceDisk(t *testing.T) {
 	tts, err := NewGoTTS(
@@ -127,4 +131,57 @@ func TestTextToVoice(t *testing.T) {
 	if err != nil {
 		log.Fatalf("写入磁盘失败，err:%v", err)
 	}
+}
+
+func TestLongTextToVoiceCreate(t *testing.T) {
+	var params = make(map[string]any)
+	params["text"] = "昏黑 hūn hēi 昏黑的夜色中 昏黑的夜色中，月光如水洒落，静谧而神秘，仿佛将世界染上一抹深邃的诗意。"
+	params["format"] = "mp3"
+	params["voice_type"] = "BV406_V2_streaming"
+
+	tts, err := NewGoTTS(
+		context.TODO(),
+		WithAppId(appId),
+		WithCluster(cluster),
+		WithToken(token),
+		//WithEmotion(), // 开启情感预测
+	)
+	if err != nil {
+		log.Fatalf("初始化失败，err:%v", err)
+	}
+	res, err := tts.LongTextToVoiceCreate(params)
+	if err != nil {
+		log.Fatalf("创建长文本转语音任务失败失败，err:%v", err)
+	}
+
+	fmt.Printf("%v \n", res)
+}
+
+func TestLongTextToVoiceId(t *testing.T) {
+	tts, err := NewGoTTS(
+		context.TODO(),
+		WithAppId(appId),
+		WithCluster(cluster),
+		WithToken(token),
+		//WithEmotion(), // 开启情感预测
+	)
+	if err != nil {
+		log.Fatalf("初始化失败，err:%v", err)
+	}
+	res, err := tts.LongTextToVoiceId("f837abed-a3a1-431c-9967-a025b1bea3aa")
+	if err != nil {
+		log.Fatalf("创建长文本转语音任务失败失败，err:%v", err)
+	}
+
+	fileName := time.Now().Format("2006-01-02-15-04-05") + "_file.mp3"
+	outFile, err := os.Create(fileName)
+	if err != nil {
+		fmt.Println("Error creating output file:", err)
+		return
+	}
+	defer outFile.Close()
+
+	internal.DownloadToDisk(res.AudioUrl, outFile)
+
+	fmt.Printf("%v \n", res)
 }

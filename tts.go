@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"github.com/zmexing/go-byte-tts/internal"
 	"io"
 	"net/http"
@@ -14,19 +15,41 @@ import (
 )
 
 const (
+	// 短文本语音合成
 	apiTts = "https://openspeech.bytedance.com/api/v1/tts"
+	// 创建长文本语音
+	apiLongTts        = "https://openspeech.bytedance.com/api/v1/tts_async/submit"
+	apiLongEmotionTts = "https://openspeech.bytedance.com/api/v1/tts_async_with_emotion/submit"
+	// 查询长文本语音合成结果
+	apiLongTtsQuery        = "https://openspeech.bytedance.com/api/v1/tts_async/query"
+	apiLongEmotionTtsQuery = "https://openspeech.bytedance.com/api/v1/tts_async_with_emotion/query"
+	// 长文本语音资源标识
+	apiLongResource        = "volc.tts_async.default"
+	apiLongEmotionResource = "volc.tts_async.emotion"
 )
+
+type GoTTSInter interface {
+	// TextToVoice 文本转语音
+	TextToVoice(params map[string]map[string]any) (*http.Response, func(), error)
+	// TextToVoiceDisk 文本转语音并写入磁盘
+	TextToVoiceDisk(params map[string]map[string]any, outFile *os.File) error
+	// LongTextToVoiceCreate 长文本语音合成 任务创建
+	LongTextToVoiceCreate(params map[string]any) (*TtsAsyncRep, error)
+	// LongTextToVoiceId 长文本语音合成 任务查询
+	LongTextToVoiceId(id string) (*TtsAsyncQueryRep, error)
+}
 
 type GoTTS struct {
 	ctx     context.Context
 	appId   string // 应用标识
 	cluster string // 业务集群
 	token   string // 应用令牌
+	emotion bool   // 是否启用情感预测
 }
 
 type Option func(*GoTTS)
 
-func NewGoTTS(ctx context.Context, opts ...Option) (*GoTTS, error) {
+func NewGoTTS(ctx context.Context, opts ...Option) (GoTTSInter, error) {
 	g := &GoTTS{ctx: ctx}
 	for _, o := range opts {
 		o(g)
@@ -59,6 +82,12 @@ func WithCluster(cluster string) Option {
 func WithToken(token string) Option {
 	return func(g *GoTTS) {
 		g.token = token
+	}
+}
+
+func WithEmotion() Option {
+	return func(g *GoTTS) {
+		g.emotion = true
 	}
 }
 
@@ -108,7 +137,6 @@ func (g *GoTTS) TextToVoice(params map[string]map[string]any) (*http.Response, f
 	}
 
 	header := map[string]any{
-		//"Content-Type":  "application/json",
 		"Authorization": fmt.Sprintf("Bearer;%s", g.token),
 	}
 
@@ -132,4 +160,108 @@ func (g *GoTTS) TextToVoice(params map[string]map[string]any) (*http.Response, f
 	}
 
 	return resp, funcClose, nil
+}
+
+func (g *GoTTS) LongTextToVoiceCreate(params map[string]any) (*TtsAsyncRep, error) {
+	params["appid"] = g.appId
+	params["reqid"] = uuid.NewString()
+
+	// 是否使用情感预测版本
+	url := apiLongTts
+	resourceId := apiLongResource
+	if g.emotion {
+		url = apiLongEmotionTts
+		resourceId = apiLongEmotionResource
+	}
+
+	jsonStr, err := json.Marshal(params)
+	if err != nil {
+		return nil, fmt.Errorf("json markshal error: %w", err)
+	}
+
+	body := map[string]any{
+		"json": string(jsonStr),
+	}
+
+	header := map[string]any{
+		"Authorization": fmt.Sprintf("Bearer;%s", g.token),
+		"Resource-Id":   resourceId,
+	}
+
+	client := internal.NewHTTPClient(
+		g.ctx,
+		internal.WithTimeout(time.Second*60),
+		internal.WithHeader(header),
+		internal.WithContentType(internal.HttpJson),
+	)
+
+	resp, funcClose, err := client.SendRequest(http.MethodPost, url, body)
+	defer funcClose()
+	if err != nil {
+		return nil, fmt.Errorf("http request failed: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("http response code failed: %w", errors.New(resp.Status))
+	}
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("http io ReadAll error: %w", err)
+	}
+
+	var ttsAsyncRep TtsAsyncRep
+	err = json.Unmarshal(respBody, &ttsAsyncRep)
+	if err != nil {
+		return nil, fmt.Errorf("http response body Unmarshal error: %w", err)
+	}
+
+	return &ttsAsyncRep, nil
+}
+
+func (g *GoTTS) LongTextToVoiceId(id string) (*TtsAsyncQueryRep, error) {
+	// 是否使用情感预测版本
+	url := apiLongTtsQuery
+	resourceId := apiLongResource
+	if g.emotion {
+		url = apiLongEmotionTtsQuery
+		resourceId = apiLongEmotionResource
+	}
+
+	var params = make(map[string]any)
+	params["appid"] = g.appId
+	params["task_id"] = id
+
+	header := map[string]any{
+		"Authorization": fmt.Sprintf("Bearer;%s", g.token),
+		"Resource-Id":   resourceId,
+	}
+
+	client := internal.NewHTTPClient(
+		g.ctx,
+		internal.WithTimeout(time.Second*60),
+		internal.WithHeader(header),
+	)
+
+	resp, funcClose, err := client.SendRequest(http.MethodGet, url, params)
+	defer funcClose()
+	if err != nil {
+		return nil, fmt.Errorf("http request failed: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("http response code failed: %w", errors.New(resp.Status))
+	}
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("http io ReadAll error: %w", err)
+	}
+
+	var result TtsAsyncQueryRep
+	err = json.Unmarshal(respBody, &result)
+	if err != nil {
+		return nil, fmt.Errorf("http response body Unmarshal error: %w", err)
+	}
+	return &result, nil
 }
