@@ -33,9 +33,12 @@ type GoTTSInter interface {
 	TextToVoice(params map[string]map[string]any) (*http.Response, func(), error)
 	// TextToVoiceDisk 文本转语音并写入磁盘
 	TextToVoiceDisk(params map[string]map[string]any, outFile *os.File) error
+
 	// LongTextToVoiceCreate 长文本语音合成 任务创建
+	// 创建合成任务的频率限制为10 QPS，请勿一次性提交过多任务。
 	LongTextToVoiceCreate(params map[string]any) (*TtsAsyncRep, error)
 	// LongTextToVoiceId 长文本语音合成 任务查询
+	// 音频URL，有效期为1个小时，请及时下载
 	LongTextToVoiceId(id string) (*TtsAsyncQueryRep, error)
 }
 
