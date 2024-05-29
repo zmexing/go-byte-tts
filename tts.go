@@ -32,8 +32,10 @@ const (
 type GoTTSInter interface {
 	// TextToVoice 文本转语音
 	TextToVoice(params map[string]map[string]any) (*http.Response, func(), error)
+
 	// TextToVoiceDisk 文本转语音并写入磁盘
 	TextToVoiceDisk(params map[string]map[string]any, outFile *os.File) error
+
 	// TextToJoinVoiceDisk 文本转语音并写入磁盘
 	// 方法 [TextToVoiceDisk] 因为超过1024字节提示系统错误，所以建议使用 [TextToJoinVoiceDisk]
 	// 该方法会自动将文本按照 1024 字节将文本拆开，最后分片生成后合并成一个语音文件
@@ -42,6 +44,7 @@ type GoTTSInter interface {
 	// LongTextToVoiceCreate 长文本语音合成 任务创建
 	// 创建合成任务的频率限制为10 QPS，请勿一次性提交过多任务。
 	LongTextToVoiceCreate(params map[string]any) (*TtsAsyncRep, error)
+
 	// LongTextToVoiceId 长文本语音合成 任务查询
 	// 音频URL，有效期为1个小时，请及时下载
 	LongTextToVoiceId(id string) (*TtsAsyncQueryRep, error)
@@ -143,43 +146,80 @@ func (g *GoTTS) TextToVoiceDisk(params map[string]map[string]any, outFile *os.Fi
 	return internal.WriteBytesToDisk(audio, outFile)
 }
 
+type ChanJoinVoice struct {
+	Index int
+	Audio []byte
+	Err   error
+}
+
 func (g *GoTTS) TextToJoinVoiceDisk(params map[string]map[string]any, outFile *os.File) error {
 	if err := g.checkParams(params); err != nil {
 		return err
 	}
 	text, _ := params["request"]["text"]
 	textList := internal.SplitText(anyUtil.AnyToStr(text), 1024)
-
 	resAudio := []byte{}
 
-	for _, v := range textList {
+	// 协程并行处理多个文本列表
+	chWork := make(chan ChanJoinVoice, len(textList))
+	defer close(chWork)
+	for i, v := range textList {
 		params["request"]["text"] = v
-		resp, funcClose, err := g.TextToVoice(params)
-		defer funcClose()
-		if err != nil {
-			return err
-		}
+		paramsCopy := params
+		go g.workTextToJoinVoiceDisk(paramsCopy, i, chWork)
+	}
 
-		respBody, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return err
+	// 按照顺序拼接协程的数据
+	resMap := make(map[int][]byte, len(textList))
+	for i := 0; i < len(textList); i++ {
+		wordRes := <-chWork
+		if wordRes.Err != nil {
+			return wordRes.Err
 		}
+		resMap[wordRes.Index] = wordRes.Audio
+	}
 
-		rep := &Rep{}
-		err = json.Unmarshal(respBody, rep)
-		if err != nil {
-			return err
+	// 按照顺序拼接结果
+	for i := 0; i < len(textList); i++ {
+		r, ok := resMap[i]
+		if !ok {
+			return errors.New("error in sequential splicing")
 		}
-
-		audio, err := base64.StdEncoding.DecodeString(rep.Data)
-		if err != nil {
-			return err
-		}
-
-		resAudio = append(resAudio, audio...)
+		resAudio = append(resAudio, r...)
 	}
 
 	return internal.WriteBytesToDisk(resAudio, outFile)
+}
+
+func (g *GoTTS) workTextToJoinVoiceDisk(params map[string]map[string]any, idx int, ch chan ChanJoinVoice) {
+	resp, funcClose, err := g.TextToVoice(params)
+	defer funcClose()
+	if err != nil {
+		ch <- ChanJoinVoice{Index: idx, Err: err}
+		return
+	}
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		ch <- ChanJoinVoice{Index: idx, Err: err}
+		return
+	}
+
+	rep := &Rep{}
+	err = json.Unmarshal(respBody, rep)
+	if err != nil {
+		ch <- ChanJoinVoice{Index: idx, Err: err}
+		return
+	}
+
+	audio, err := base64.StdEncoding.DecodeString(rep.Data)
+	if err != nil {
+		ch <- ChanJoinVoice{Index: idx, Err: err}
+		return
+	}
+
+	// 成功后写入通道
+	ch <- ChanJoinVoice{Index: idx, Err: nil, Audio: audio}
 }
 
 // TextToVoice 文本转语音
