@@ -2,6 +2,7 @@ package internal
 
 import "errors"
 
+// CheckParams 检查参数传递
 func CheckParams(params map[string]map[string]any) error {
 	if params["audio"] == nil {
 		params["audio"] = make(map[string]any)
@@ -19,6 +20,7 @@ func CheckParams(params map[string]map[string]any) error {
 	return nil
 }
 
+// DeepCopyParams 参数map值深拷贝
 func DeepCopyParams(original map[string]map[string]any) map[string]map[string]any {
 	copyData := make(map[string]map[string]any)
 	for k, v := range original {
