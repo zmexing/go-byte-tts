@@ -33,6 +33,15 @@ func WriteBytesToDisk(b []byte, outFile *os.File) error {
 	return err
 }
 
+func WriteBytesToDiskFilename(b []byte, filename string) error {
+	outFile, err := os.Create(filename)
+	if err != nil {
+		return fmt.Errorf("os create file error: ", err)
+	}
+	defer outFile.Close()
+	return WriteBytesToDisk(b, outFile)
+}
+
 func DownloadToDisk(url string, outFile *os.File) error {
 	// 从URL获取数据
 	resp, err := http.Get(url)

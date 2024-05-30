@@ -34,3 +34,9 @@ type TtsAsyncQueryRep struct {
 	TextLength    int    `json:"text_length"`
 	UrlExpireTime int    `json:"url_expire_time"`
 }
+
+type ChanJoinVoice struct {
+	Index int
+	Audio []byte
+	Err   error
+}
