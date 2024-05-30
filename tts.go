@@ -292,6 +292,11 @@ func (g *GoTTS) TextToJoinVoiceDisk(params map[string]map[string]any, outFile *o
 		newMap := internal.DeepCopyParams(params)
 		newMap["request"]["text"] = v
 
+		// 如果文本被拆开，则中间的连接停顿应该减小
+		if i != (len(textList) - 1) {
+			newMap["request"]["silence_duration"] = 50
+		}
+
 		go g.workTextToJoinVoiceDisk(newMap, i, chWork)
 	}
 
